@@ -8,6 +8,10 @@
     "type": "git",
     "url": "https://github.com/Hubs-Foundation/hubs.git"
   },
+  "engines": {
+    "node": ">=12.0.0",
+    "npm": ">=6.0.0"
+  },
   "scripts": {
     "start": "webpack serve --mode=development --env hubsCloudDev=1",
     "dev": "webpack serve --mode=development --env dev=1",
@@ -22,10 +26,11 @@
   "dependencies": {
     "@iarna/toml": "^2.2.3",
     "@mozilla/lilypad-ui": "^1.8.2",
-    "aframe": "github:hubs-foundation/aframe#hubs/master",
+    "aframe": "^1.6.0",
     "bitecs": "github:hubs-foundation/bitECS#hubs-patches",
     "classnames": "^2.2.5",
     "hubs": "file:..",
+    "networked-aframe": "^0.14.0",
     "react": "^16.1.1",
     "react-admin": "^2.6.3",
     "react-dom": "^16.1.1",
@@ -71,5 +76,25 @@
     "webpack-cli": "^4.10.0",
     "webpack-dev-server": "^4.9.3",
     "worker-loader": "^3.0.8"
+  },
+  "overrides": {
+    "aframe": {
+      "engines": {
+        "node": ">=0.0.0",
+        "npm": ">=0.0.0"
+      }
+    },
+    "three": {
+      "engines": {
+        "node": ">=0.0.0",
+        "npm": ">=0.0.0"
+      }
+    },
+    "bitecs": {
+      "engines": {
+        "node": ">=0.0.0",
+        "npm": ">=0.0.0"
+      }
+    }
   }
 }

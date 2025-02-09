@@ -8,14 +8,15 @@ const HTMLWebpackPlugin = require("html-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 
+// HTTPS 用証明書の設定
 function createHTTPSConfig() {
-  // Generate certs for the local webpack-dev-server.
+  // certs フォルダが存在すれば、既存の証明書を使用
   if (fs.existsSync(path.join(__dirname, "certs"))) {
     const key = fs.readFileSync(path.join(__dirname, "certs", "key.pem"));
     const cert = fs.readFileSync(path.join(__dirname, "certs", "cert.pem"));
-
     return { key, cert };
   } else {
+    // 存在しない場合は自己署名証明書を生成
     const pems = selfsigned.generate(
       [
         {
@@ -30,24 +31,16 @@ function createHTTPSConfig() {
           {
             name: "subjectAltName",
             altNames: [
-              {
-                type: 2,
-                value: "localhost"
-              },
-              {
-                type: 2,
-                value: "hubs.local"
-              }
+              { type: 2, value: "localhost" },
+              { type: 2, value: "hubs.local" }
             ]
           }
         ]
       }
     );
-
     fs.mkdirSync(path.join(__dirname, "certs"));
     fs.writeFileSync(path.join(__dirname, "certs", "cert.pem"), pems.cert);
     fs.writeFileSync(path.join(__dirname, "certs", "key.pem"), pems.private);
-
     return {
       key: pems.private,
       cert: pems.cert
@@ -64,50 +57,45 @@ const dracoWasmPath = path.resolve(threeExamplesDir, "js", "libs", "draco", "glt
 module.exports = (env, argv) => {
   env = env || {};
 
-  // Load environment variables from .env files.
-  // .env takes precedent over .defaults.env
-  // Previously defined environment variables are not overwritten
+  // .env と .defaults.env から環境変数を読み込み
   dotenv.config({ path: ".env" });
   dotenv.config({ path: ".defaults.env" });
 
+  // local モードの場合、追加の環境変数を設定
   if (env.local) {
     Object.assign(process.env, {
-      HOST: "hubs.local",
-      RETICULUM_SOCKET_SERVER: "hubs.local",
+      HOST: "localhost",
+      RETICULUM_SOCKET_SERVER: "localhost",
       CORS_PROXY_SERVER: "hubs-proxy.local:4000",
-      NON_CORS_PROXY_DOMAINS: "hubs.local,dev.reticulum.io",
-      BASE_ASSETS_PATH: "https://hubs.local:8989/",
-      RETICULUM_SERVER: "hubs.local:4000",
+      NON_CORS_PROXY_DOMAINS: "localhost,dev.reticulum.io",
+      BASE_ASSETS_PATH: "https://localhost:8989/",
+      RETICULUM_SERVER: "localhost:4000",
       POSTGREST_SERVER: "",
       ITA_SERVER: "turkey",
       TIER: "p1"
     });
   }
 
-  const defaultHostName = "hubs.local";
+  const defaultHostName = "localhost";
   const host = process.env.HOST_IP || defaultHostName;
+  const internalHostname = process.env.INTERNAL_HOSTNAME || "localhost";
 
-  const internalHostname = process.env.INTERNAL_HOSTNAME || "hubs.local";
   return {
     cache: {
       type: "filesystem"
     },
     resolve: {
       alias: {
-        // aframe and networked-aframe are still using commonjs modules. three and bitecs are peer dependanciees
-        // but they are "smart" and have builds for both ESM and CJS depending on if import or require is used.
-        // This forces the ESM version to be used otherwise we end up with multiple instances of the libraries,
-        // and for example AFRAME.THREE.Object3D !== THREE.Object3D in Hubs code, which breaks many things.
+        // ESM バージョンを強制的に使用するためのエイリアス
         three$: path.resolve(__dirname, "./node_modules/three/build/three.module.js"),
         bitecs$: path.resolve(__dirname, "./node_modules/bitecs/dist/index.mjs"),
-
-        // TODO these aliases are reequired because `three` only "exports" stuff in examples/jsm
+        // three の examples 内のライブラリのエイリアス
         "three/examples/js/libs/basis/basis_transcoder.js": basisTranscoderPath,
         "three/examples/js/libs/draco/gltf/draco_wasm_wrapper.js": dracoWasmWrapperPath,
         "three/examples/js/libs/basis/basis_transcoder.wasm": basisWasmPath,
         "three/examples/js/libs/draco/gltf/draco_decoder.wasm": dracoWasmPath
       },
-      // Allows using symlinks in node_modules
+      // symlinks の利用を無効にして、シンボリックリンク経由の解決を避ける
       symlinks: false,
       fallback: {
         fs: false,
@@ -126,6 +114,11 @@ module.exports = (env, argv) => {
     },
     devtool: argv.mode === "production" ? "source-map" : "inline-source-map",
     devServer: {
+      // ※ 静的コンテンツとして "public" フォルダではなく、"dist"（空のディレクトリなど）を指定することで、
+      // webpack の出力ファイル（admin.html）を優先的に返すようにする
+      static: {
+        directory: path.join(__dirname, "dist")
+      },
       client: {
         overlay: {
           errors: true,
@@ -142,14 +135,18 @@ module.exports = (env, argv) => {
       headers: {
         "Access-Control-Allow-Origin": "*"
       },
+      // 404 の場合に /admin.html を返す設定
+      historyApiFallback: {
+        index: "/admin.html"
+      },
       setupMiddlewares: (middlewares, { app }) => {
-        // be flexible with people accessing via a local reticulum on another port
+        // ローカル reticulum 経由の場合の CORS 設定
         app.use(cors({ origin: /hubs\.local(:\d*)?$/ }));
         return middlewares;
       }
     },
     performance: {
-      // Ignore media and sourcemaps when warning about file size.
+      // 一部ファイル（メディア、ソースマップなど）は警告対象外にする
       assetFilter(assetFilename) {
         return !/\.(map|png|jpg|gif|glb|webm)$/.test(assetFilename);
       }
@@ -160,11 +157,11 @@ module.exports = (env, argv) => {
           test: /\.html$/,
           loader: "html-loader",
           options: {
-            minimize: false // This is handled by HTMLWebpackPlugin
+            minimize: false // HTMLWebpackPlugin で minify するため
           }
         },
-        // Some JS assets are loaded at runtime and should be copied unmodified and loaded using file-loader
         {
+          // 特定の JS アセットはそのままコピーするため file-loader を使用
           test: [basisTranscoderPath, dracoWasmWrapperPath],
           loader: "file-loader",
           options: {
@@ -181,17 +178,13 @@ module.exports = (env, argv) => {
           }
         },
         {
-          // We use babel to handle typescript so that features are correctly polyfilled for our targeted browsers. It also ends up being
-          // a good deeal faster since it just strips out types. It does NOT typecheck. Typechecking is only done at build and (ideally) in your editor.
+          // TypeScript (.ts/.tsx) の処理
+          // Babel により型情報を除去してトランスパイル
           test: /\.tsx?$/,
           loader: "babel-loader",
           options: require("../babel.config"),
-          exclude: function (modulePath) {
-            return /node_modules/.test(modulePath) && !/node_modules\/hubs/.test(modulePath);
-          }
+          include: [path.resolve(__dirname, "src"), path.resolve(__dirname, "node_modules", "hubs", "src")]
         },
-        // TODO worker-loader has been deprecated, but we need "inline" support which is not available yet
-        // ideally instead of inlining workers we should serve them off the root domain instead of CDN.
         {
           test: /\.worker\.js$/,
           loader: "worker-loader",
@@ -204,17 +197,14 @@ module.exports = (env, argv) => {
         {
           test: /\.(scss|css)$/,
           use: [
-            {
-              loader: MiniCssExtractPlugin.loader
-            },
+            MiniCssExtractPlugin.loader,
             {
               loader: "css-loader",
               options: {
                 modules: {
                   localIdentName: "[name]__[local]__[hash:base64:5]",
                   exportLocalsConvention: "camelCase",
-                  // TODO we ideally would be able to get rid of this but we have some global styles and many :local's that would become superfluous
-                  mode: "global"
+                  mode: "global" // グローバルスタイルの場合は global を指定
                 }
               }
             },
@@ -229,8 +219,6 @@ module.exports = (env, argv) => {
           test: /\.(png|jpg|gif|glb|ogg|mp3|mp4|wav|woff2|webm)$/,
           type: "asset/resource",
           generator: {
-            // move required assets to output dir and add a hash for cache busting
-            // Make asset paths relative to /src
             filename: function ({ filename }) {
               let rootPath = path.dirname(filename) + path.sep;
               if (rootPath.startsWith("src" + path.sep)) {
@@ -238,7 +226,6 @@ module.exports = (env, argv) => {
                 parts.shift();
                 rootPath = parts.join(path.sep);
               }
-
               if (rootPath.startsWith("node_modules" + path.sep + "hubs" + path.sep + "src" + path.sep)) {
                 const parts = rootPath.split(path.sep);
                 parts.shift();
@@ -246,7 +233,6 @@ module.exports = (env, argv) => {
                 parts.shift();
                 rootPath = parts.join(path.sep);
               }
-              // console.log(path, name, contenthash, ext);
               return rootPath + "[name]-[contenthash].[ext]";
             }
           }
@@ -266,7 +252,6 @@ module.exports = (env, argv) => {
     },
     plugins: [
       new webpack.ProvidePlugin({
-        // TODO we should bee direclty importing THREE stuff when we need it
         process: "process/browser",
         THREE: "three",
         Buffer: ["buffer", "Buffer"]
@@ -280,18 +265,11 @@ module.exports = (env, argv) => {
         }
       }),
       new CopyWebpackPlugin({
-        patterns: [
-          {
-            from: "src/assets/images/favicon.ico",
-            to: "favicon.ico"
-          }
-        ]
+        patterns: [{ from: "src/assets/images/favicon.ico", to: "favicon.ico" }]
       }),
-      // Extract required css and add a content hash.
       new MiniCssExtractPlugin({
         filename: "assets/stylesheets/[name]-[contenthash].css"
       }),
-      // Define process.env variables in the browser context.
       new webpack.DefinePlugin({
         "process.browser": true,
         "process.env": JSON.stringify({
