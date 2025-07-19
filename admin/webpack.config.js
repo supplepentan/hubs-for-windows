@@ -30,10 +30,9 @@ function createHTTPSConfig() {
         extensions: [
           {
             name: "subjectAltName",
-            altNames: [
-              { type: 2, value: "localhost" },
-              { type: 2, value: "hubs.local" }
-            ]
+              altNames: [
+                { type: 2, value: "localhost" }
+              ]
           }
         ]
       }
@@ -66,7 +65,7 @@ module.exports = (env, argv) => {
     Object.assign(process.env, {
       HOST: "localhost",
       RETICULUM_SOCKET_SERVER: "localhost",
-      CORS_PROXY_SERVER: "hubs-proxy.local:4000",
+      CORS_PROXY_SERVER: "localhost:4000",
       NON_CORS_PROXY_DOMAINS: "localhost,dev.reticulum.io",
       BASE_ASSETS_PATH: "https://localhost:8989/",
       RETICULUM_SERVER: "localhost:4000",
@@ -141,7 +140,7 @@ module.exports = (env, argv) => {
       },
       setupMiddlewares: (middlewares, { app }) => {
         // ローカル reticulum 経由の場合の CORS 設定
-        app.use(cors({ origin: /hubs\.local(:\d*)?$/ }));
+        app.use(cors({ origin: /localhost(:\d*)?$/ }));
         return middlewares;
       }
     },

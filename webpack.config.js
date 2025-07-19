@@ -40,10 +40,6 @@ function createHTTPSConfig() {
               {
                 type: 2,
                 value: "localhost"
-              },
-              {
-                type: 2,
-                value: "hubs.local"
               }
             ]
           }
@@ -190,7 +186,7 @@ async function fetchAppConfigAndEnvironmentVars() {
   process.env.SHORTLINK_DOMAIN = shortlink_domain;
   process.env.CORS_PROXY_SERVER = `localhost:8080/cors-proxy`;
   process.env.THUMBNAIL_SERVER = thumbnail_server;
-  process.env.NON_CORS_PROXY_DOMAINS = `${localIp},hubs.local,localhost`;
+  process.env.NON_CORS_PROXY_DOMAINS = `${localIp},localhost`;
 
   return appConfig;
 }
@@ -255,7 +251,7 @@ module.exports = async (env, argv) => {
       Object.assign(process.env, {
         HOST: localDevHost,
         RETICULUM_SOCKET_SERVER: localDevHost,
-        CORS_PROXY_SERVER: "hubs-proxy.local:4000",
+        CORS_PROXY_SERVER: "localhost:4000",
         NON_CORS_PROXY_DOMAINS: `${localDevHost},dev.reticulum.io`,
         BASE_ASSETS_PATH: `https://${localDevHost}:8080/`,
         RETICULUM_SERVER: `${localDevHost}:4000`,
@@ -269,7 +265,7 @@ module.exports = async (env, argv) => {
   // In production, the environment variables are defined in CI or loaded from ita and
   // the app config is injected into the head of the page by Reticulum.
 
-  const host = process.env.HOST_IP || env.localDev || env.remoteDev ? "hubs.local" : "localhost";
+  const host = process.env.HOST_IP || "localhost";
 
   const liveReload = !!process.env.LIVE_RELOAD || false;
 
@@ -401,7 +397,7 @@ module.exports = async (env, argv) => {
         });
 
         // be flexible with people accessing via a local reticulum on another port
-        app.use(cors({ origin: /hubs\.local(:\d*)?$/ }));
+        app.use(cors({ origin: /localhost(:\d*)?$/ }));
         // networked-aframe makes HEAD requests to the server for time syncing. Respond with an empty body.
         app.head("*", function (req, res, next) {
           if (req.method === "HEAD") {
